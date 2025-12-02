@@ -1,7 +1,5 @@
-Update (October 2025):
-I’m no longer maintaining or updating this project.
-However, if anyone wants to continue development or improve support for other appliances, be my guest!
-Fork the repository — I’d be happy to see it live on through the community.
+Update (December 2025):
+I forked from Rangner Ferraz Guimaraes (rferrazguimaraes) original driver and rewrote the oauth code due to a race / refresh condition. 
 
 # Hubitat-HomeConnect
 Integration for Home Connect appliances [Bosch, Siemens, Neff, Balay, Constructa, Pitsos, Profilo, Thermador and Gaggenau] for Hubitat 
