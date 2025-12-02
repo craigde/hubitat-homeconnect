@@ -12,12 +12,14 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Home Connect Dishwasher (Child Device of Home Conection Integration)
+ *  Home Connect Cleaning Robot (Child Device of Home Connection Integration)
  *
- *  Author: Rangner Ferraz Guimaraes (rferrazguimaraes)
- *  Date: 2021-11-28
- *  Version: 1.0 - Initial commit
- *  Version: 1.1 - Added support for events EmptyDustBoxAndCleanFilter, RobotIsStuck and DockingStationNotFound
+ *  Current owner: Craig Dewar (craigde) > 1.7
+ *  Original author:Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
+ *
+ *  Version history
+ *  1.0 - Initial commit
+ *
  */
 
 import groovy.transform.Field
@@ -30,7 +32,7 @@ import groovy.json.JsonSlurper
 def driverVer() { return "1.1" }
 
 metadata {
-    definition(name: "Home Connect CleaningRobot", namespace: "rferrazguimaraes", author: "Rangner Ferraz Guimaraes") {
+    definition(name: "Home Connect CleaningRobot", namespace: "craigde", author: "Craig Dewar") {
         capability "Sensor"
         capability "Switch"
         capability "ContactSensor"
