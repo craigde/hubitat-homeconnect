@@ -1,8 +1,10 @@
 /**
  *  Home Connect Dishwasher (Child Device of Home Connection Integration)
  *
- *  Author: Rangner Ferraz Guimaraes (rferrazguimaraes)
- *  Contributors: @you-know-who for Hubitat update compatibility & Node-RED remaining-time support
+ *  Author: 
+ *  Current owner: Craig Dewar (craigde) > 1.7
+ *  Contributors:Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
+ *  
  *
  *  Version history
  *  1.0 - Initial commit
@@ -13,6 +15,7 @@
  *  1.5 - Added event for StartInRelative
  *  1.6 - Local STATUS sniffing, contact mirroring, bool preference read, JSON .toString()
  *  1.7 - Hubitat update compatibility; also parse Option.* ProgramProgress/RemainingProgramTime and expose remainingTime/remainingTimeDisplay
+*.  1.8 - Small fixes
  */
 
 import groovy.transform.Field
@@ -22,10 +25,10 @@ import groovy.json.JsonSlurper
 @Field List<String> LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
 @Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[1]
 @Field static final Integer eventStreamDisconnectGracePeriod = 30
-def driverVer() { return "1.7" }
+def driverVer() { return "1.8" }
 
 metadata {
-    definition(name: "Home Connect Dishwasher", namespace: "rferrazguimaraes", author: "Rangner Ferraz Guimaraes") {
+    definition(name: "Home Connect Dishwasher", namespace: "craigde", author: "Craig Dewar") {
         capability "Sensor"
         capability "Switch"
         capability "ContactSensor"
