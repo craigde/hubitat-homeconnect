@@ -14,7 +14,7 @@
  *
  *  Home Connect Cleaning Robot (Child Device of Home Connection Integration)
  *
- *  Current owner: Craig Dewar (craigde) > 1.7
+ *  Current owner: Craig Dewar (craigde)
  *  Original author:Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
  *
  *  Version history
