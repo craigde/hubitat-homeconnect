@@ -1,7 +1,8 @@
 /**
  *  Copyright 2022
  *
- *  Based on the original work done by https://github.com/Wattos/hubitat
+ *  
+*   Based on the original work done by https://github.com/Wattos/hubitat
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
@@ -14,25 +15,10 @@
  *
  *  Home Connect Integration (APP for Home Conection API integration)
  *
- *  Author: Rangner Ferraz Guimaraes (rferrazguimaraes)
- *  Date: 2021-11-28
- *  Version: 1.0 - Initial commit
- *  Version: 2.0 - Added missing event messages and support to Refrigerator and Freezer
- *  Version: 2.1 - Added LightingBrightness, Lighting and LocalControlActive attributes
- *  Version: 2.2 - Fixed LocalControlActive attribute
- *  Version: 2.3 - Tried to add lighting and ambient light commands
- *  Version: 2.4 - Tried to add light brightness commands
- *  Version: 2.5 - Exposed more info when there is an error 
- *  Version: 2.6 - Fixed httpGet and httPut calls
- *  Version: 2.7 - Added support to raw event stream (rawStream), fixed bool SetSettings, fixed OperationState message
- *  Version: 2.8 - Fixed setting a Setting again
- *  Version: 2.9 - Added venting and intensive level support
- *  Version: 3.0 - Fixed event stream notification messages
- *  Version: 3.1 - Fixed error stream notification messages
- *  Version: 3.2 - Added WineCooler, CleaningRobot and CookProcessor devices (not tested)
- *  Version: 3.3 - Added missing messages: FreshMode, VacationMode and SabbathMode
- *  Version: 3.4 - Changed installation process
- *  Version: 3.5 - Added support for more events
+ *  Author: Craig Dewar (craigde)
+ *  Date: 2025-11-24
+ *  Version 1.0 - Rewrote oauth connection code to fix race condition / page refresh issue and improve initial connection logic
+ *  Version: 1.1 - Added support for ProgramAborted event
  */
 
 import groovy.transform.Field
@@ -43,8 +29,8 @@ import groovy.json.JsonSlurper
 
 definition(
     name: 'Home Connect Integration',
-    namespace: 'rferrazguimaraes',
-    author: 'Rangner Ferraz Guimaraes',
+    namespace: 'craigde',
+    author: 'Craig Dewar',
     description: 'Integrates with Home Connect',
     category: 'My Apps',
     iconUrl: '',
@@ -139,6 +125,34 @@ def pageIntro() {
     }
 }
 
+//def pageAuthentication() {
+//    Utils.toLogger("debug", "Showing Authentication Page");
+
+ //   if (!atomicState.accessToken) {
+//        atomicState.accessToken = createAccessToken();
+//    }
+
+//    return dynamicPage(
+//        name: 'pageAuthentication', 
+//        title: 'Home Connect Authentication',
+//        nextPage: 'pageDevices',
+//        install: false, 
+//        uninstall: false) {
+//        section() {
+//            def title = "Connect to Home Connect"
+//            if (atomicState.oAuthAuthToken) {
+//                Utils.showHideNextButton(true);
+//                title = "Re-connect to Home Connect"
+//                paragraph '<b>Success!</b> You are connected to Home Connect. Please press the Next button.'
+//            } else {
+//                Utils.showHideNextButton(false);
+//                paragraph 'To continue, you need to connect your hubitat to Home connect. Please press the button below to connect'
+//            }
+            
+//            href url: generateOAuthUrl(), style:'external', required:false, 'title': title
+//        }
+//    }
+//}
 def pageAuthentication() {
     Utils.toLogger("debug", "Showing Authentication Page");
 
@@ -151,7 +165,8 @@ def pageAuthentication() {
         title: 'Home Connect Authentication',
         nextPage: 'pageDevices',
         install: false, 
-        uninstall: false) {
+        uninstall: false,
+        refreshInterval: 0) {  // Add this to prevent auto-refresh
         section() {
             def title = "Connect to Home Connect"
             if (atomicState.oAuthAuthToken) {
@@ -163,11 +178,10 @@ def pageAuthentication() {
                 paragraph 'To continue, you need to connect your hubitat to Home connect. Please press the button below to connect'
             }
             
-            href url: generateOAuthUrl(), style:'external', required:false, 'title': title
+            href url: generateOAuthUrl(), style:'external', required:false, title: title, description: "Tap to connect to Home Connect"
         }
     }
 }
-
 def pageDevices() {
     HomeConnectAPI.getHomeAppliances() { devices -> homeConnectDevices = devices}
     def deviceList = [:]
@@ -576,9 +590,17 @@ def sendEventToDevice(device, final data) {
                 device.sendEvent(name: "DoorState", value: "${it.displayvalue}", displayed: true, isStateChange: true)
                 device.sendEvent(name: "contact", value: "${it.displayvalue?.toLowerCase()}")
             break
-            case "BSH.Common.Status.OperationState":
-                device.sendEvent(name: "OperationState", value: "${it.value?.substring(it.value?.lastIndexOf(".")+1)}", displayed: true, isStateChange: true)
-            break
+		//updated 1.1
+		case "BSH.Common.Status.OperationState":
+    		def operationState = it.value?.substring(it.value?.lastIndexOf(".")+1)
+    		device.sendEvent(name: "OperationState", value: "${operationState}", displayed: true, isStateChange: true)
+    
+   			 // Reset timers when operation returns to Ready or Inactive state
+    		if (operationState == "Ready" || operationState == "Inactive") {
+        		device.sendEvent(name: "RemainingProgramTime", value: "00:00", displayed: true, isStateChange: true)
+        		device.sendEvent(name: "ProgramProgress", value: "0%", displayed: true, isStateChange: true)
+        		device.sendEvent(name: "ElapsedProgramTime", value: "00:00", displayed: true, isStateChange: true)}
+			break
             case "BSH.Common.Status.LocalControlActive":
                 device.sendEvent(name: "LocalControlActive", value: "${it.value}", displayed: true, isStateChange: true)
             break
@@ -615,9 +637,22 @@ def sendEventToDevice(device, final data) {
             case "BSH.Common.Option.StartInRelative":
                 device.sendEvent(name: "StartInRelative", value: "${Utils.convertSecondsToTime(it.value)}", displayed: true, isStateChange: true)
             break
-            case "BSH.Common.Event.ProgramFinished":
-                device.sendEvent(name: "EventPresentState", value: "${it.displayvalue}", displayed: true, isStateChange: true)
-            break
+
+      //added / updated in 1.1      
+             case "BSH.Common.Event.ProgramFinished":
+   				   device.sendEvent(name: "EventPresentState", value: "${it.displayvalue}", displayed: true, isStateChange: true)
+    			   // Reset remaining time when program finishes
+   				   device.sendEvent(name: "RemainingProgramTime", value: "00:00", displayed: true, isStateChange: true)
+    			   device.sendEvent(name: "ProgramProgress", value: "0%", displayed: true, isStateChange: true)
+			 break
+			 case "BSH.Common.Event.ProgramAborted":
+ 				   device.sendEvent(name: "EventPresentState", value: "${it.displayvalue}", displayed: true, isStateChange: true)
+   				   device.sendEvent(name: "ProgramAborted", value: "${it.value?.substring(it.value?.lastIndexOf(".")+1)}", displayed: true, isStateChange: true)
+   				   // Reset remaining time when program is aborted
+   				   device.sendEvent(name: "RemainingProgramTime", value: "00:00", displayed: true, isStateChange: true)
+    			   device.sendEvent(name: "ProgramProgress", value: "0%", displayed: true, isStateChange: true)
+			  break
+            
             case "Dishcare.Dishwasher.Option.IntensivZone":
                 device.sendEvent(name: "IntensivZone", value: "${it.value}", displayed: true, isStateChange: true)
                 device.updateSetting("${it.name.replaceAll("\\s","")}", [value:"${it.value}", type:"bool"])
@@ -738,15 +773,70 @@ mappings {
 }
 
 def generateOAuthUrl() {
-    atomicState.oAuthInitState = UUID.randomUUID().toString();
+    def timestamp = now().toString()
+    def stateValue = generateSecureState(timestamp)
+    
+    Utils.toLogger("debug", "Generated OAuth state with timestamp: ${timestamp}")
+    
     def params = [
         'client_id': getClientId(),
         'redirect_uri': getOAuthRedirectUrl(),
         'response_type': 'code',
         'scope': 'IdentifyAppliance Monitor Settings Control',
-        'state': atomicState.oAuthInitState
+        'state': stateValue
     ];
     return "${OAUTH_AUTHORIZATION_URL()}?${Utils.toQueryString(params)}";
+}
+def generateHash(String message) {
+    // Simple but effective hash using Java's built-in hashCode
+    return message.hashCode().toString()
+}
+def generateSecureState(timestamp) {
+    // Create a state value that includes timestamp and can be validated without storage
+    // Format: timestamp:hash, but we'll encode it to avoid special characters
+    def message = "${timestamp}:${getClientId()}:${getClientSecret()}"
+    def hash = generateHash(message)
+    def stateValue = "${timestamp}:${hash}"
+    
+    // Base64 encode to avoid special characters causing URL parsing issues
+    return stateValue.bytes.encodeBase64().toString()
+}
+
+def validateSecureState(stateValue) {
+    try {
+        // Decode the Base64 state
+        def decoded = new String(stateValue.decodeBase64())
+        
+        def parts = decoded.split(':')
+        if (parts.length != 2) {
+            Utils.toLogger("error", "Invalid state format")
+            return false
+        }
+        
+        def timestamp = parts[0]
+        def receivedHash = parts[1]
+        
+        // Check if timestamp is within acceptable range (10 minutes)
+        def stateAge = now() - timestamp.toLong()
+        if (stateAge < 0 || stateAge > 600000) {
+            Utils.toLogger("error", "State timestamp is too old or invalid: ${stateAge}ms")
+            return false
+        }
+        
+        // Regenerate hash and compare
+        def message = "${timestamp}:${getClientId()}:${getClientSecret()}"
+        def expectedHash = generateHash(message)
+        
+        if (expectedHash != receivedHash) {
+            Utils.toLogger("error", "State hash does not match. Expected: ${expectedHash}, Received: ${receivedHash}")
+            return false
+        }
+        
+        return true
+    } catch (Exception e) {
+        Utils.toLogger("error", "Error validating state: ${e}")
+        return false
+    }
 }
 
 def getOAuthRedirectUrl() {
@@ -754,27 +844,44 @@ def getOAuthRedirectUrl() {
 }
 
 def oAuthCallback() {
-    Utils.toLogger("debug", "Received oAuth callback");
+    Utils.toLogger("debug", "Received oAuth callback")
+    Utils.toLogger("debug", "Callback params: ${params}")
 
-    def code = params.code;
-    def oAuthState = params.state;
-    if (oAuthState != atomicState.oAuthInitState) {
-        Utils.toLogger("error", "Init state did not match our state on the callback. Ignoring the request")
-        return renderOAuthFailure();
+    def code = params.code
+    def oAuthState = params.state
+    
+    if (!code) {
+        Utils.toLogger("error", "No authorization code received in callback")
+        return renderOAuthFailure()
     }
     
-    // Prevent any replay attacks and re-initialize the state
-    atomicState.oAuthInitState = null;
-    atomicState.oAuthRefreshToken = null;
-    atomicState.oAuthAuthToken = null;
-    atomicState.oAuthTokenExpires = null;
+    if (!oAuthState) {
+        Utils.toLogger("error", "No state received in callback")
+        return renderOAuthFailure()
+    }
+    
+    // Validate state without needing to store it
+    if (!validateSecureState(oAuthState)) {
+        Utils.toLogger("error", "Invalid state received in callback: ${oAuthState}")
+        return renderOAuthFailure()
+    }
+    
+    Utils.toLogger("info", "State validation successful")
+    
+    // Clear OAuth tokens (no state to clear!)
+    atomicState.oAuthRefreshToken = null
+    atomicState.oAuthAuthToken = null
+    atomicState.oAuthTokenExpires = null
 
-    acquireOAuthToken(code);
+    acquireOAuthToken(code)
 
     if (!atomicState.oAuthAuthToken) {
-        return renderOAuthFailure();
+        Utils.toLogger("error", "Failed to acquire OAuth token")
+        return renderOAuthFailure()
     }
-    renderOAuthSuccess();
+    
+    Utils.toLogger("info", "OAuth authentication successful")
+    renderOAuthSuccess()
 }
 
 def acquireOAuthToken(String code) {
@@ -1557,10 +1664,15 @@ def Utils_create() {
         return input.replaceAll( valueInteger.toString() + " seconds", valueStringConverted )
     }        
     
-    instance.showHideNextButton = { show ->
-	    if(show) paragraph "<script>\$('button[name=\"_action_next\"]').show()</script>";
-	    else paragraph "<script>\$('button[name=\"_action_next\"]').hide()</script>";
-    }
+  //  instance.showHideNextButton = { show ->
+//	    if(show) paragraph "<script>\$('button[name=\"_action_next\"]').show()</script>";
+//	    else paragraph "<script>\$('button[name=\"_action_next\"]').hide()</script>";
+//    }
+    
+instance.showHideNextButton = { show ->
+    if(show) paragraph "<script>if(typeof jQuery !== 'undefined'){\$('button[name=\"_action_next\"]').show();}</script>"
+    else paragraph "<script>if(typeof jQuery !== 'undefined'){\$('button[name=\"_action_next\"]').hide();}</script>"
+}
     
     return instance;
 }
