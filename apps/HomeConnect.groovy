@@ -1,8 +1,8 @@
 /**
  *  Copyright 2022
  *
- *  
-*   Based on the original work done by https://github.com/Wattos/hubitat
+ *  Forked from https://github.com/rfg81/hubitat-homeconnect
+ *  Based on the original work done by https://github.com/Wattos/hubitat
  * 
  *  Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except
  *  in compliance with the License. You may obtain a copy of the License at:
