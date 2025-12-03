@@ -12,20 +12,14 @@
  *  on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License
  *  for the specific language governing permissions and limitations under the License.
  *
- *  Home Connect Hood (Child Device of Home Conection Integration)
+ *  Home Connect Hood (Child Device of Home Connection Integration)
  *
- *  Author: Rangner Ferraz Guimaraes (rferrazguimaraes)
- *  Date: 2021-11-28
- *  Version: 1.0 - Initial commit
- *  Version: 1.1 - Added LightingBrightness, Lighting and LocalControlActive attributes
- *  Version: 1.2 - Tried to add lighting and ambient light commands
- *  Version: 1.3 - Tried to add light brightness commands
- *  Version: 1.4 - Removed unsupported light commands
- *  Version: 1.5 - Added better handling of STOP events from event stream
- *  Version: 1.6 - Added venting and intensive level support
- *  Version: 1.7 - Added FanControl capability
- *  Version: 1.8 - Updating program when pressing 'Initialize' button
- *  Version: 1.9 - Added support for events GreaseFilterMaxSaturationNearlyReached and GreaseFilterMaxSaturationReached
+ *  Current owner: Craig Dewar (craigde)
+ *  Original author:Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
+ *
+ *  Version history
+ *  1.0 - Initial commit
+ *
  */
 
 import groovy.transform.Field
@@ -38,7 +32,7 @@ import groovy.json.JsonSlurper
 def driverVer() { return "1.9" }
 
 metadata {
-    definition(name: "Home Connect Hood", namespace: "rferrazguimaraes", author: "Rangner Ferraz Guimaraes") {
+    definition(name: "Home Connect Hood", namespace: "craigde", author: "Craig Dewar") {
         capability "Sensor"
         capability "Switch"
         capability "Initialize"
