@@ -15,7 +15,8 @@
  *  1.5 - Added event for StartInRelative
  *  1.6 - Local STATUS sniffing, contact mirroring, bool preference read, JSON .toString()
  *  1.7 - Hubitat update compatibility; also parse Option.* ProgramProgress/RemainingProgramTime and expose remainingTime/remainingTimeDisplay
-*.  1.8 - Small fixes
+ *  1.8 - Small fixes
+ *  1.9 - Added support for delayed start
  */
 
 import groovy.transform.Field
@@ -38,6 +39,9 @@ metadata {
                               [name: "Message*", type:"STRING", description: "Message"]]
         command "startProgram"
         command "stopProgram"
+        command "startProgramDelayed", [
+                    [name:"delayMinutes*", type:"NUMBER", description:"Minutes from now to start (e.g., 120 for 2 hours)"]
+                ]
 
         attribute "AvailableProgramsList", "JSON_OBJECT"
         attribute "AvailableOptionsList", "JSON_OBJECT"
@@ -113,6 +117,19 @@ void startProgram() {
 
 void stopProgram() {
     parent.stopProgram(device)
+}
+
+void startProgramDelayed(Number delayMinutes) {
+    if (selectedProgram != null) {
+        def programToSelect = state.foundAvailablePrograms.find { it.name == selectedProgram }
+        if (programToSelect) {
+            parent.startProgramDelayed(device, programToSelect.key, delayMinutes)
+        } else {
+            Utils.toLogger("error", "Program '${selectedProgram}' not found in available programs")
+        }
+    } else {
+        Utils.toLogger("error", "No program selected in preferences")
+    }
 }
 
 void initialize() {
