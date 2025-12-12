@@ -19,6 +19,7 @@
  *  Date: 2025-11-24
  *  Version 1.0 - Rewrote oauth connection code to fix race condition / page refresh issue and improve initial connection logic
  *  Version: 1.1 - Added support for ProgramAborted event
+ *  Version: 1.2 Added support for delayed start
  */
 
 import groovy.transform.Field
@@ -401,6 +402,17 @@ def getAvailableProgramList(device) {
     }
     
     return availableProgramList
+}
+
+def setStartInRelative(device, seconds) {
+    Utils.toLogger("debug", "setStartInRelative from ${device} - ${seconds} seconds")
+    
+    def haId = device.deviceNetworkId
+    
+    // First set the selected program option
+    HomeConnectAPI.setSelectedProgramOption(haId, "BSH.Common.Option.StartInRelative", seconds) { response ->
+        device.deviceLog("info", "Start time set to ${Utils.convertSecondsToTime(seconds)} from now")
+    }
 }
 
 def setSelectedProgram(device, programKey, optionKey = "") {
