@@ -404,14 +404,18 @@ def getAvailableProgramList(device) {
     return availableProgramList
 }
 
-def setStartInRelative(device, seconds) {
-    Utils.toLogger("debug", "setStartInRelative from ${device} - ${seconds} seconds")
+def startProgramDelayed(device, programKey, delayMinutes) {
+    Utils.toLogger("debug", "startProgramDelayed device: ${device}, program: ${programKey}, delay: ${delayMinutes} minutes")
     
     def haId = device.deviceNetworkId
+    def delaySeconds = (delayMinutes as Integer) * 60
     
-    // First set the selected program option
-    HomeConnectAPI.setSelectedProgramOption(haId, "BSH.Common.Option.StartInRelative", seconds) { response ->
-        device.deviceLog("info", "Start time set to ${Utils.convertSecondsToTime(seconds)} from now")
+    // Build the options array with the delay
+    def options = [[key: "BSH.Common.Option.StartInRelative", value: delaySeconds]]
+    
+    // Set and start the program with the delay option
+    HomeConnectAPI.setActiveProgram(haId, programKey, options) { response ->
+        device.deviceLog("info", "Program ${programKey} scheduled to start in ${delayMinutes} minutes")
     }
 }
 
