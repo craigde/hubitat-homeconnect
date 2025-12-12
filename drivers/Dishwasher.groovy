@@ -40,9 +40,9 @@ metadata {
         command "startProgram"
         command "stopProgram"
         command "startProgramDelayed", [
-                    [name:"delayMinutes*", type:"NUMBER", description:"Minutes from now to start (e.g., 120 for 2 hours)"]
-                ]
-
+                [name:"delayMinutes*", type:"NUMBER", description:"Minutes from now to start"],
+                [name:"program", type:"ENUM", description:"Program to run (optional, defaults to selected program or Normal)", constraints:["Auto","Normal","Heavy","Express","Delicate","Rinse","Machine Care"]]
+        ]
         attribute "AvailableProgramsList", "JSON_OBJECT"
         attribute "AvailableOptionsList", "JSON_OBJECT"
 
@@ -119,16 +119,18 @@ void stopProgram() {
     parent.stopProgram(device)
 }
 
-void startProgramDelayed(Number delayMinutes) {
-    if (selectedProgram != null) {
-        def programToSelect = state.foundAvailablePrograms.find { it.name == selectedProgram }
-        if (programToSelect) {
-            parent.startProgramDelayed(device, programToSelect.key, delayMinutes)
-        } else {
-            Utils.toLogger("error", "Program '${selectedProgram}' not found in available programs")
-        }
+void startProgramDelayed(Number delayMinutes, String program = null) {
+    // Determine which program to use
+    String programToUse = program ?: selectedProgram ?: "Normal"
+    
+    Utils.toLogger("debug", "startProgramDelayed: delay=${delayMinutes} min, program=${programToUse}")
+    
+    def programToSelect = state.foundAvailablePrograms.find { it.name == programToUse }
+    if (programToSelect) {
+        parent.startProgramDelayed(device, programToSelect.key, delayMinutes)
     } else {
-        Utils.toLogger("error", "No program selected in preferences")
+        Utils.toLogger("error", "Program '${programToUse}' not found in available programs")
+        Utils.toLogger("debug", "Available programs: ${state.foundAvailablePrograms?.collect { it.name }}")
     }
 }
 
