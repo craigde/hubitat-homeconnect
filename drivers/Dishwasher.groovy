@@ -107,11 +107,17 @@ metadata {
 /* ---------- Commands ---------- */
 
 void startProgram() {
-    if (selectedProgram != null) {
-        def programToSelect = state.foundAvailablePrograms.find { it.name == selectedProgram }
-        if (programToSelect) {
-            parent.startProgram(device, programToSelect.key)
-        }
+    // Determine which program to use with fallback logic
+    String programToUse = selectedProgram ?: device.currentValue("ActiveProgram") ?: "Normal"
+    
+    Utils.toLogger("debug", "startProgram: using program '${programToUse}'")
+    
+    def programToSelect = state.foundAvailablePrograms.find { it.name == programToUse }
+    if (programToSelect) {
+        parent.startProgram(device, programToSelect.key)
+    } else {
+        Utils.toLogger("error", "Program '${programToUse}' not found in available programs")
+        Utils.toLogger("debug", "Available programs: ${state.foundAvailablePrograms?.collect { it.name }}")
     }
 }
 
