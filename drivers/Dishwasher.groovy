@@ -17,6 +17,7 @@
  *  1.7 - Hubitat update compatibility; also parse Option.* ProgramProgress/RemainingProgramTime and expose remainingTime/remainingTimeDisplay
  *  1.8 - Small fixes
  *  1.9 - Added support for delayed start
+ *  1.9.1 - Fixed setPowerState
  */
 
 import groovy.transform.Field
@@ -222,13 +223,7 @@ def on()  { safeSetPowerState(true)  }
 def off() { safeSetPowerState(false) }
 
 private void safeSetPowerState(Boolean val) {
-    if (parent.respondsTo('setPowerState')) {
-        parent.setPowerState(device, val)
-    } else if (parent.respondsTo('setPowertate')) { // legacy typo
-        parent.setPowertate(device, val)
-    } else {
-        Utils.toLogger("error", "Parent has no setPowerState/setPowertate method")
-    }
+    parent.setPowerState(device, val)
 }
 
 /* ---------- Init & Event Stream ---------- */
