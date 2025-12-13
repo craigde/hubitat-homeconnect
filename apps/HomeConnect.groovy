@@ -223,42 +223,42 @@ def synchronizeDevices() {
         def homeConnectDevice = state.foundDevices.find({it.haId == homeConnectDeviceId})
         switch(homeConnectDevice.type) {
             case "CleaningRobot":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect CleaningRobot', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect CleaningRobot', hubitatDeviceId);
             break
             case "CookProcessor":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect CookProcessor', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect CookProcessor', hubitatDeviceId);
             break
             case "Dishwasher":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Dishwasher', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Dishwasher', hubitatDeviceId);
             break
             case "Dryer":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Dryer', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Dryer', hubitatDeviceId);
             break
             case "Washer":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Washer', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Washer', hubitatDeviceId);
             break
             case "WasherDryer":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect WasherDryer', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect WasherDryer', hubitatDeviceId);
             break
             case "Freezer":
             case "FridgeFreezer":
             case "Refrigerator":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect FridgeFreezer', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect FridgeFreezer', hubitatDeviceId);
             break
             case "CoffeeMaker":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect CoffeeMaker', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect CoffeeMaker', hubitatDeviceId);
             break
             case "Hood":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Hood', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Hood', hubitatDeviceId);
             break
             case "Hob":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Hob', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Hob', hubitatDeviceId);
             break
             case "Oven":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect Oven', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect Oven', hubitatDeviceId);
             break
             case "WineCooler":
-                device = addChildDevice('rferrazguimaraes', 'Home Connect WineCooler', hubitatDeviceId);
+                device = addChildDevice('craigde', 'Home Connect WineCooler', hubitatDeviceId);
             break
             
             default:
