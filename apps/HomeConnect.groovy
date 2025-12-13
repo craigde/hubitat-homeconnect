@@ -325,8 +325,8 @@ def stopProgram(device) {
     }
 }
 
-def setPowertate(device, boolean state) {
-    Utils.toLogger("debug", "setPowertate from ${device} - ${state}")
+def setPowerState(device, boolean state) {
+    Utils.toLogger("debug", "setPowerState from ${device} - ${state}")
 
     HomeConnectAPI.setSettings(device.deviceNetworkId, "BSH.Common.Setting.PowerState", state ? "BSH.Common.EnumType.PowerState.On" : "BSH.Common.EnumType.PowerState.Off") { settings ->
         device.deviceLog("info", "Settings Sent: ${settings}")
