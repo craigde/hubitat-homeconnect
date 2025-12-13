@@ -20,6 +20,7 @@
  *  Version 1.0 - Rewrote oauth connection code to fix race condition / page refresh issue and improve initial connection logic
  *  Version: 1.1 - Added support for ProgramAborted event
  *  Version: 1.2 Added support for delayed start
+ *  Version: 1.2.1 Fixed device namespace issues
  */
 
 import groovy.transform.Field
