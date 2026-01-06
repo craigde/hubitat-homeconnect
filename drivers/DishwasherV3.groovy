@@ -123,4 +123,114 @@ def parseEvent(Map evt) {
             sendEvent(name: "operationState", value: state)
         break
 
-        case "BSH.Common.Status.D
+        case "BSH.Common.Status.DoorState":
+            def state = extractEnum(evt.value)
+            sendEvent(name: "doorState", value: state)
+        break
+
+        case "BSH.Common.Option.RemainingProgramTime":
+            sendEvent(name: "remainingProgramTime", value: secondsToTime(evt.value))
+        break
+
+        case "BSH.Common.Option.ElapsedProgramTime":
+            sendEvent(name: "elapsedProgramTime", value: secondsToTime(evt.value))
+        break
+
+        case "BSH.Common.Option.ProgramProgress":
+            sendEvent(name: "programProgress", value: evt.value)
+        break
+
+        case "BSH.Common.Root.ActiveProgram":
+            sendEvent(name: "activeProgram", value: evt.displayvalue)
+        break
+
+        case "BSH.Common.Root.SelectedProgram":
+            sendEvent(name: "selectedProgram", value: evt.displayvalue)
+        break
+
+        /* ===== Dishwasher Options ===== */
+
+        case "Dishcare.Dishwasher.Option.IntensivZone":
+        case "Dishcare.Dishwasher.Option.BrillianceDry":
+        case "Dishcare.Dishwasher.Option.VarioSpeedPlus":
+        case "Dishcare.Dishwasher.Option.SilenceOnDemand":
+        case "Dishcare.Dishwasher.Option.HalfLoad":
+        case "Dishcare.Dishwasher.Option.ExtraDry":
+        case "Dishcare.Dishwasher.Option.HygienePlus":
+            def attr = evt.key.split("\\.").last()
+            sendEvent(name: attr, value: evt.value)
+        break
+
+        /* ===== Dishwasher Events ===== */
+
+        case "Dishcare.Dishwasher.Event.RinseAidNearlyEmpty":
+            sendEvent(name: "RinseAidNearlyEmpty", value: extractEnum(evt.value))
+        break
+
+        case "Dishcare.Dishwasher.Event.SaltNearlyEmpty":
+            sendEvent(name: "SaltNearlyEmpty", value: extractEnum(evt.value))
+        break
+
+        default:
+            log.warn "Unhandled dishwasher event: ${evt.key}"
+        break
+    }
+}
+
+/* ============================================================
+   INITIALIZATION HELPERS
+   ============================================================ */
+
+def parseStatus(List statusList) {
+    statusList.each { item ->
+        parseEvent([
+            haId: device.deviceNetworkId.replace("HC3-",""),
+            key: item.key,
+            value: item.value,
+            displayvalue: item.value
+        ])
+    }
+}
+
+def parseSettings(List settingsList) {
+    settingsList.each { item ->
+        parseEvent([
+            haId: device.deviceNetworkId.replace("HC3-",""),
+            key: item.key,
+            value: item.value,
+            displayvalue: item.value
+        ])
+    }
+}
+
+def parseActiveProgram(Map program) {
+    if (!program) return
+
+    sendEvent(name: "activeProgram", value: program.key)
+
+    program.options?.each { opt ->
+        parseEvent([
+            haId: device.deviceNetworkId.replace("HC3-",""),
+            key: opt.key,
+            value: opt.value,
+            displayvalue: opt.value
+        ])
+    }
+}
+
+/* ============================================================
+   UTILITY HELPERS
+   ============================================================ */
+
+private String extractEnum(String full) {
+    if (!full) return null
+    return full.substring(full.lastIndexOf(".") + 1)
+}
+
+private String secondsToTime(Integer sec) {
+    if (!sec) return "00:00"
+    long minutes = sec / 60
+    long hours = minutes / 60
+    minutes = minutes % 60
+    return String.format("%02d:%02d", hours, minutes)
+}
