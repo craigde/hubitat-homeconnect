@@ -3,7 +3,7 @@
  *
  *  Author: 
  *  Current owner: Craig Dewar (craigde) > 1.7
- *  Contributors: Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
+ *  Contributors:Rangner Ferraz Guimaraes (rferrazguimaraes) for original driver port
  *  
  *
  *  Version history
@@ -15,10 +15,7 @@
  *  1.5 - Added event for StartInRelative
  *  1.6 - Local STATUS sniffing, contact mirroring, bool preference read, JSON .toString()
  *  1.7 - Hubitat update compatibility; also parse Option.* ProgramProgress/RemainingProgramTime and expose remainingTime/remainingTimeDisplay
- *  1.8 - Small fixes
- *  1.9 - Added support for delayed start
- *  1.9.1 - Fixed setPowerState
- *  2.0 - Driver now handles all event parsing directly (preparation for parent app refactor)
+*.  1.8 - Small fixes
  */
 
 import groovy.transform.Field
@@ -28,7 +25,7 @@ import groovy.json.JsonSlurper
 @Field List<String> LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
 @Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[1]
 @Field static final Integer eventStreamDisconnectGracePeriod = 30
-def driverVer() { return "2.0" }
+def driverVer() { return "1.8" }
 
 metadata {
     definition(name: "Home Connect Dishwasher", namespace: "craigde", author: "Craig Dewar") {
@@ -41,17 +38,12 @@ metadata {
                               [name: "Message*", type:"STRING", description: "Message"]]
         command "startProgram"
         command "stopProgram"
-        command "startProgramDelayed", [
-                [name:"delayMinutes*", type:"NUMBER", description:"Minutes from now to start"],
-                [name:"program", type:"ENUM", description:"Program to run (optional, defaults to selected program or Normal)", constraints:["Auto","Normal","Heavy","Express","Delicate","Rinse","Machine Care"]]
-        ]
-        
+
         attribute "AvailableProgramsList", "JSON_OBJECT"
         attribute "AvailableOptionsList", "JSON_OBJECT"
 
         attribute "RemoteControlActive", "enum", ["true", "false"]
         attribute "RemoteControlStartAllowed", "enum", ["true", "false"]
-        attribute "LocalControlActive", "enum", ["true", "false"]
 
         attribute "OperationState", "enum", [
             "Inactive","Ready","DelayedStart","Run","Pause","ActionRequired","Finished","Error","Aborting"
@@ -67,15 +59,10 @@ metadata {
         attribute "EventPresentState", "enum", ["Event active","Off","Confirmed"]
 
         attribute "ProgramProgress", "number"
-        attribute "RemainingProgramTime", "string"
-        attribute "ElapsedProgramTime", "string"
-        attribute "Duration", "string"
+        attribute "RemainingProgramTime", "string"     // HH:MM display
         attribute "StartInRelative", "string"
 
-        attribute "ChildLock", "enum", ["true", "false"]
-        attribute "ProgramAborted", "string"
-
-        // Common dishwasher options
+        // Common dishwasher options (string attributes so we can show true/false words)
         attribute "IntensivZone", "string"
         attribute "BrillianceDry", "string"
         attribute "VarioSpeedPlus", "string"
@@ -87,10 +74,8 @@ metadata {
         attribute "SaltNearlyEmpty", "string"
 
         // Extra attributes for Node-RED SVG flow
-        attribute "remainingTime", "number"
-        attribute "remainingTimeDisplay", "string"
-        attribute "elapsedTime", "number"
-        attribute "elapsedTimeDisplay", "string"
+        attribute "remainingTime", "number"            // seconds
+        attribute "remainingTimeDisplay", "string"     // HH:MM
 
         attribute "EventStreamStatus", "enum", ["connected", "disconnected"]
         attribute "DriverVersion", "string"
@@ -115,38 +100,19 @@ metadata {
     }
 }
 
-/* ==================== Commands ==================== */
+/* ---------- Commands ---------- */
 
 void startProgram() {
-    String programToUse = selectedProgram ?: device.currentValue("ActiveProgram") ?: "Normal"
-    
-    Utils.toLogger("debug", "startProgram: using program '${programToUse}'")
-    
-    def programToSelect = state.foundAvailablePrograms.find { it.name == programToUse }
-    if (programToSelect) {
-        parent.startProgram(device, programToSelect.key)
-    } else {
-        Utils.toLogger("error", "Program '${programToUse}' not found in available programs")
-        Utils.toLogger("debug", "Available programs: ${state.foundAvailablePrograms?.collect { it.name }}")
+    if (selectedProgram != null) {
+        def programToSelect = state.foundAvailablePrograms.find { it.name == selectedProgram }
+        if (programToSelect) {
+            parent.startProgram(device, programToSelect.key)
+        }
     }
 }
 
 void stopProgram() {
     parent.stopProgram(device)
-}
-
-void startProgramDelayed(Number delayMinutes, String program = null) {
-    String programToUse = program ?: selectedProgram ?: "Normal"
-    
-    Utils.toLogger("debug", "startProgramDelayed: delay=${delayMinutes} min, program=${programToUse}")
-    
-    def programToSelect = state.foundAvailablePrograms.find { it.name == programToUse }
-    if (programToSelect) {
-        parent.startProgramDelayed(device, programToSelect.key, delayMinutes)
-    } else {
-        Utils.toLogger("error", "Program '${programToUse}' not found in available programs")
-        Utils.toLogger("debug", "Available programs: ${state.foundAvailablePrograms?.collect { it.name }}")
-    }
 }
 
 void initialize() {
@@ -170,7 +136,7 @@ void uninstalled() {
     disconnectEventStream()
 }
 
-/* ==================== Helpers: program & options ==================== */
+/* ---------- Helpers: program & options ---------- */
 
 void setCurrentProgram() {
     if (selectedProgram != null) {
@@ -205,6 +171,7 @@ void updateAvailableProgramList() {
     Utils.toLogger("debug", "updateAvailableProgramList state.foundAvailablePrograms: ${state.foundAvailablePrograms}")
     def programList = state.foundAvailablePrograms.collect { it.name }
     Utils.toLogger("debug", "getAvailablePrograms programList: ${programList}")
+    // .toString() avoids Groovy's ambiguous block warning after Hubitat update
     sendEvent(name:"AvailableProgramsList", value: new groovy.json.JsonBuilder(programList).toString(), displayed: false)
 }
 
@@ -224,16 +191,22 @@ void updateAvailableOptionsList() {
     sendEvent(name:"AvailableOptionsList", value: [], displayed: false)
 }
 
-/* ==================== Switch handling ==================== */
+/* ---------- Switch handling ---------- */
 
 def on()  { safeSetPowerState(true)  }
 def off() { safeSetPowerState(false) }
 
 private void safeSetPowerState(Boolean val) {
-    parent.setPowerState(device, val)
+    if (parent.respondsTo('setPowerState')) {
+        parent.setPowerState(device, val)
+    } else if (parent.respondsTo('setPowertate')) { // legacy typo
+        parent.setPowertate(device, val)
+    } else {
+        Utils.toLogger("error", "Parent has no setPowerState/setPowertate method")
+    }
 }
 
-/* ==================== Init & Event Stream ==================== */
+/* ---------- Init & Event Stream ---------- */
 
 void intializeStatus() {
     Utils.toLogger("debug", "Initializing the status of the device")
@@ -297,7 +270,7 @@ void eventStreamStatus(String text) {
     def (String type, String message) = text.split(':', 2)
     switch (type) {
         case 'START':
-            atomicState.oStartTokenExpires = now() + 60_000
+            atomicState.oStartTokenExpires = now() + 60_000 // 60 seconds
             setEventStreamStatusToConnected()
             break
         case 'STOP':
@@ -316,206 +289,7 @@ void eventStreamStatus(String text) {
     }
 }
 
-/* ==================== Parse incoming SSE data ==================== */
-
-void parse(String text) {
-    Utils.toLogger("debug", "Received eventstream message: ${text}")
-
-    // Handle the SSE data directly in the driver
-    try {
-        if (text?.startsWith('data:')) {
-            String payload = text.substring(5).trim()
-            if (payload && payload.startsWith('{')) {
-                def obj = new groovy.json.JsonSlurper().parseText(payload)
-                def items = (obj?.items instanceof List) ? obj.items : []
-
-                items.each { item ->
-                    handleHomeConnectEvent(item)
-                }
-            }
-        }
-    } catch (e) {
-        Utils.toLogger("error", "parse() payload error: ${e}")
-    }
-
-    // Still let parent process (redundant but harmless until parent is refactored)
-    parent.processMessage(device, text)
-    sendEvent(name: "DriverVersion", value: driverVer())
-}
-
-private void handleHomeConnectEvent(Map item) {
-    if (!item?.key) return
-    
-    String key = item.key
-    def value = item.value
-    String displayValue = item.displayvalue ?: value?.toString()
-    
-    Utils.toLogger("debug", "handleHomeConnectEvent: key=${key}, value=${value}")
-    
-    switch(key) {
-        // ============ Root/Program ============
-        case "BSH.Common.Root.ActiveProgram":
-            sendEvent(name: "ActiveProgram", value: displayValue, isStateChange: true)
-            break
-        case "BSH.Common.Root.SelectedProgram":
-            sendEvent(name: "SelectedProgram", value: displayValue, isStateChange: true)
-            device.updateSetting("selectedProgram", [value: displayValue, type: "enum"])
-            break
-            
-        // ============ Status ============
-        case "BSH.Common.Status.DoorState":
-            String doorState = value?.tokenize('.')?.last() ?: displayValue
-            sendEvent(name: "DoorState", value: doorState, isStateChange: true)
-            sendEvent(name: "contact", value: (doorState?.toLowerCase() == "open") ? "open" : "closed")
-            break
-            
-        case "BSH.Common.Status.OperationState":
-            String opState = value?.substring(value?.lastIndexOf(".") + 1)
-            sendEvent(name: "OperationState", value: opState, isStateChange: true)
-            // Reset timers when operation returns to Ready or Inactive
-            if (opState in ["Ready", "Inactive"]) {
-                resetProgramTimers()
-            }
-            break
-            
-        case "BSH.Common.Status.LocalControlActive":
-            sendEvent(name: "LocalControlActive", value: value?.toString(), isStateChange: true)
-            break
-        case "BSH.Common.Status.RemoteControlActive":
-            sendEvent(name: "RemoteControlActive", value: value?.toString(), isStateChange: true)
-            break
-        case "BSH.Common.Status.RemoteControlStartAllowed":
-            sendEvent(name: "RemoteControlStartAllowed", value: value?.toString(), isStateChange: true)
-            break
-            
-        // ============ Settings ============
-        case "BSH.Common.Setting.PowerState":
-            String pwr = value?.tokenize('.')?.last() ?: displayValue
-            sendEvent(name: "PowerState", value: pwr, isStateChange: true)
-            break
-        case "BSH.Common.Setting.ChildLock":
-            sendEvent(name: "ChildLock", value: value?.toString(), isStateChange: true)
-            break
-            
-        // ============ Options / Timing ============
-        case "BSH.Common.Option.RemainingProgramTime":
-            handleRemainingTime(value)
-            break
-        case "BSH.Common.Option.ElapsedProgramTime":
-            handleElapsedTime(value)
-            break
-        case "BSH.Common.Option.Duration":
-            Integer secs = (value instanceof Number) ? value.toInteger() : 0
-            sendEvent(name: "Duration", value: formatHHMMFromSeconds(secs), isStateChange: true)
-            break
-        case "BSH.Common.Option.ProgramProgress":
-            Integer pct = (value instanceof Number) ? value.toInteger() : 0
-            sendEvent(name: "ProgramProgress", value: pct, isStateChange: true)
-            break
-        case "BSH.Common.Option.StartInRelative":
-            Integer secs = (value instanceof Number) ? value.toInteger() : 0
-            sendEvent(name: "StartInRelative", value: formatHHMMFromSeconds(secs), isStateChange: true)
-            break
-            
-        // ============ Events ============
-        case "BSH.Common.Event.ProgramFinished":
-            sendEvent(name: "EventPresentState", value: displayValue, isStateChange: true)
-            resetProgramTimers()
-            break
-        case "BSH.Common.Event.ProgramAborted":
-            sendEvent(name: "EventPresentState", value: displayValue, isStateChange: true)
-            sendEvent(name: "ProgramAborted", value: value?.substring(value?.lastIndexOf(".") + 1), isStateChange: true)
-            resetProgramTimers()
-            break
-            
-        // ============ Dishwasher-specific options ============
-        case "Dishcare.Dishwasher.Option.IntensivZone":
-            sendEvent(name: "IntensivZone", value: value?.toString(), isStateChange: true)
-            device.updateSetting("IntensivZone", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.BrillianceDry":
-            sendEvent(name: "BrillianceDry", value: value?.toString(), isStateChange: true)
-            device.updateSetting("BrillianceDry", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.VarioSpeedPlus":
-            sendEvent(name: "VarioSpeedPlus", value: value?.toString(), isStateChange: true)
-            device.updateSetting("VarioSpeedPlus", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.SilenceOnDemand":
-            sendEvent(name: "SilenceOnDemand", value: value?.toString(), isStateChange: true)
-            device.updateSetting("SilenceOnDemand", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.HalfLoad":
-            sendEvent(name: "HalfLoad", value: value?.toString(), isStateChange: true)
-            device.updateSetting("HalfLoad", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.ExtraDry":
-            sendEvent(name: "ExtraDry", value: value?.toString(), isStateChange: true)
-            device.updateSetting("ExtraDry", [value: value?.toString(), type: "bool"])
-            break
-        case "Dishcare.Dishwasher.Option.HygienePlus":
-            sendEvent(name: "HygienePlus", value: value?.toString(), isStateChange: true)
-            device.updateSetting("HygienePlus", [value: value?.toString(), type: "bool"])
-            break
-            
-        // ============ Dishwasher alerts ============
-        case "Dishcare.Dishwasher.Event.RinseAidNearlyEmpty":
-            sendEvent(name: "RinseAidNearlyEmpty", value: value?.substring(value?.lastIndexOf(".") + 1), isStateChange: true)
-            break
-        case "Dishcare.Dishwasher.Event.SaltNearlyEmpty":
-            sendEvent(name: "SaltNearlyEmpty", value: value?.substring(value?.lastIndexOf(".") + 1), isStateChange: true)
-            break
-            
-        default:
-            Utils.toLogger("trace", "Unhandled event: ${key} = ${value}")
-            break
-    }
-}
-
-private void handleRemainingTime(def value) {
-    Integer secs = (value instanceof Number) ? value.toInteger() : 0
-    
-    // Ignore spurious 0 while actively running
-    if (secs == 0) {
-        String opState = device.currentValue("OperationState") ?: ""
-        Integer progress = (device.currentValue("ProgramProgress") ?: 0) as Integer
-        String pwrState = device.currentValue("PowerState") ?: ""
-        
-        boolean acceptZero = opState in ['Finished','Inactive','Ready','Error','Aborting'] || 
-                            progress >= 100 || 
-                            pwrState == 'Off'
-        
-        if (!acceptZero) {
-            Utils.toLogger("debug", "Ignoring transient RemainingProgramTime=0 during Run")
-            return
-        }
-    }
-    
-    String hhmm = formatHHMMFromSeconds(secs)
-    sendEvent(name: "RemainingProgramTime", value: hhmm, isStateChange: true)
-    // Node-RED attributes
-    sendEvent(name: "remainingTime", value: secs, isStateChange: true)
-    sendEvent(name: "remainingTimeDisplay", value: hhmm, isStateChange: true)
-}
-
-private void handleElapsedTime(def value) {
-    Integer secs = (value instanceof Number) ? value.toInteger() : 0
-    String hhmm = formatHHMMFromSeconds(secs)
-    sendEvent(name: "ElapsedProgramTime", value: hhmm, isStateChange: true)
-    // Node-RED attributes
-    sendEvent(name: "elapsedTime", value: secs, isStateChange: true)
-    sendEvent(name: "elapsedTimeDisplay", value: hhmm, isStateChange: true)
-}
-
-private void resetProgramTimers() {
-    sendEvent(name: "RemainingProgramTime", value: "00:00", isStateChange: true)
-    sendEvent(name: "ProgramProgress", value: 0, isStateChange: true)
-    sendEvent(name: "ElapsedProgramTime", value: "00:00", isStateChange: true)
-    sendEvent(name: "remainingTime", value: 0, isStateChange: true)
-    sendEvent(name: "remainingTimeDisplay", value: "00:00", isStateChange: true)
-    sendEvent(name: "elapsedTime", value: 0, isStateChange: true)
-    sendEvent(name: "elapsedTimeDisplay", value: "00:00", isStateChange: true)
-}
+/* ---------- Parse incoming SSE lines ---------- */
 
 private String formatHHMMFromSeconds(Integer secs) {
     if (secs == null || secs < 0) secs = 0
@@ -524,13 +298,96 @@ private String formatHHMMFromSeconds(Integer secs) {
     return "${String.format('%02d', h)}:${String.format('%02d', m)}"
 }
 
-/* ==================== Misc ==================== */
+void parse(String text) {
+    Utils.toLogger("debug", "Received eventstream message: ${text}")
+
+    // Lightweight JSON sniffing so we can immediately reflect common attributes
+    try {
+        if (text?.startsWith('data:')) {
+            String payload = text.substring(5).trim()
+            if (payload && payload.startsWith('{')) {
+                def obj = new groovy.json.JsonSlurper().parseText(payload)
+                def items = (obj?.items instanceof List) ? obj.items : []
+
+                items.each { item ->
+                    String key = item?.key as String
+                    def valObj = item?.value
+                    String valStr = (valObj != null) ? valObj.toString() : null
+
+                    switch (key) {
+                        /* --- Door / Contact --- */
+                        case 'BSH.Common.Status.DoorState':
+                            String pretty = valStr?.tokenize('.')?.last()
+                            if (pretty in ['Open','Closed','Locked']) {
+                                sendEvent(name: "DoorState", value: pretty, isStateChange: true)
+                                if (pretty == 'Open')  sendEvent(name: "contact", value: "open",   isStateChange: true)
+                                if (pretty == 'Closed') sendEvent(name: "contact", value: "closed", isStateChange: true)
+                            }
+                            break
+
+                        /* --- Operation state --- */
+                        case 'BSH.Common.Status.OperationState':
+                            String op = valStr?.tokenize('.')?.last()
+                            if (op) sendEvent(name: "OperationState", value: op, isStateChange: true)
+                            break
+
+                        /* --- Power (often reported as a Setting) --- */
+                        case 'BSH.Common.Setting.PowerState':
+                        case 'BSH.Common.Status.PowerState':
+                            String pwr = valStr?.tokenize('.')?.last()
+                            if (pwr) sendEvent(name: "PowerState", value: pwr, isStateChange: true)
+                            break
+
+                        /* --- Progress (may come as Status.* or Option.*) --- */
+                        case 'BSH.Common.Status.ProgramProgress':
+                        case 'BSH.Common.Option.ProgramProgress':
+                            Integer pct = (valObj instanceof Number) ? (valObj as Integer)
+                                        : (valStr?.isInteger() ? valStr.toInteger() : null)
+                            if (pct != null) sendEvent(name: "ProgramProgress", value: pct, isStateChange: true)
+                            break
+
+                        /* --- Remaining time (may come as Status.* or Option.*) --- */
+                        case 'BSH.Common.Status.RemainingProgramTime':
+                        case 'BSH.Common.Option.RemainingProgramTime':
+                            Integer secs = (valObj instanceof Number) ? (valObj as Integer)
+                                       : (valStr?.isInteger() ? valStr.toInteger() : null)
+                            if (secs != null) {
+                                // Ignore spurious 0 while actively running
+                                String op2 = (device.currentValue("OperationState") ?: "")
+                                Integer prog2 = ((device.currentValue("ProgramProgress") ?: 0) as Integer)
+                                String pwr2 = (device.currentValue("PowerState") ?: "")
+                                boolean acceptZero = ['Finished','Inactive','Ready','Error','Aborting'].contains(op2) || prog2 >= 100 || pwr2 == 'Off'
+                                if (secs == 0 && !acceptZero) {
+                                    Utils.toLogger("debug", "Ignoring transient RemainingProgramTime=0 during Run (op=$op2, prog=$prog2, pwr=$pwr2)")
+                                    break
+                                }
+                                String hhmm = formatHHMMFromSeconds(secs)
+                                sendEvent(name: "RemainingProgramTime", value: hhmm, isStateChange: true)
+                                // Extras for Node-RED SVG flow
+                                sendEvent(name: "remainingTime", value: secs, isStateChange: true)
+                                sendEvent(name: "remainingTimeDisplay", value: hhmm, isStateChange: false)
+                            }
+                            break
+                    } // switch
+                } // each
+            }
+        }
+    } catch (e) {
+        Utils.toLogger("error", "STATUS/OPTION payload parse error: ${e}")
+    }
+
+    // Always let the parent handle the full message
+    parent.processMessage(device, text)
+    sendEvent(name: "DriverVersion", value: driverVer())
+}
+
+/* ---------- Misc ---------- */
 
 def deviceLog(level, msg) {
     Utils.toLogger(level, msg)
 }
 
-/* ==================== Utilities ==================== */
+/* ---------- Utilities ---------- */
 
 def Utils_create() {
     def instance = [:]
@@ -547,7 +404,7 @@ def Utils_create() {
     return instance
 }
 
-/* ==================== Lists helpers ==================== */
+/* ---------- Lists helpers ---------- */
 
 List<String> getAvailableProgramsList() {
     String json = device?.currentValue("AvailableProgramsList")
