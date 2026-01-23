@@ -60,6 +60,7 @@ metadata {
 
         attribute "ProgramProgress", "number"
         attribute "RemainingProgramTime", "string"     // HH:MM display
+        attribute "ElapsedProgramTime", "string"       // HH:MM display
         attribute "StartInRelative", "string"
 
         // Common dishwasher options (string attributes so we can show true/false words)
@@ -76,6 +77,8 @@ metadata {
         // Extra attributes for Node-RED SVG flow
         attribute "remainingTime", "number"            // seconds
         attribute "remainingTimeDisplay", "string"     // HH:MM
+        attribute "elapsedTime", "number"              // seconds
+        attribute "elapsedTimeDisplay", "string"       // HH:MM
 
         attribute "EventStreamStatus", "enum", ["connected", "disconnected"]
         attribute "DriverVersion", "string"
@@ -366,6 +369,20 @@ void parse(String text) {
                                 // Extras for Node-RED SVG flow
                                 sendEvent(name: "remainingTime", value: secs, isStateChange: true)
                                 sendEvent(name: "remainingTimeDisplay", value: hhmm, isStateChange: false)
+                            }
+                            break
+
+                        /* --- Elapsed time (may come as Status.* or Option.*) --- */
+                        case 'BSH.Common.Status.ElapsedProgramTime':
+                        case 'BSH.Common.Option.ElapsedProgramTime':
+                            Integer secs = (valObj instanceof Number) ? (valObj as Integer)
+                                       : (valStr?.isInteger() ? valStr.toInteger() : null)
+                            if (secs != null) {
+                                String hhmm = formatHHMMFromSeconds(secs)
+                                sendEvent(name: "ElapsedProgramTime", value: hhmm, isStateChange: true)
+                                // Extras for Node-RED SVG flow
+                                sendEvent(name: "elapsedTime", value: secs, isStateChange: true)
+                                sendEvent(name: "elapsedTimeDisplay", value: hhmm, isStateChange: false)
                             }
                             break
                     } // switch
