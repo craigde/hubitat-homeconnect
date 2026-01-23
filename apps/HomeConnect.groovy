@@ -561,9 +561,7 @@ def processData(device, final dataContainer) {
 
     if(dataContainer instanceof ArrayList) {
         //Utils.toLogger("debug", "It's an ArrayList: ${dataContainer}")
-        dataContainer.each {
-            sendEventToDevice(device, it.key)
-        }
+        sendEventToDevice(device, dataContainer)
     } else if(dataContainer instanceof Map) {
         //Utils.toLogger("debug", "It's a Map: ${dataContainer}")
         if(dataContainer.containsKey("event")) {
