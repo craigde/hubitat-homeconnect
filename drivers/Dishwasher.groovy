@@ -15,7 +15,8 @@
  *  1.5 - Added event for StartInRelative
  *  1.6 - Local STATUS sniffing, contact mirroring, bool preference read, JSON .toString()
  *  1.7 - Hubitat update compatibility; also parse Option.* ProgramProgress/RemainingProgramTime and expose remainingTime/remainingTimeDisplay
-*.  1.8 - Small fixes
+ *  1.8 - Small fixes
+ *  1.9 - Added local handling for BSH.Common.Event.ProgramFinished event
  */
 
 import groovy.transform.Field
@@ -25,7 +26,7 @@ import groovy.json.JsonSlurper
 @Field List<String> LOG_LEVELS = ["error", "warn", "info", "debug", "trace"]
 @Field String DEFAULT_LOG_LEVEL = LOG_LEVELS[1]
 @Field static final Integer eventStreamDisconnectGracePeriod = 30
-def driverVer() { return "1.8" }
+def driverVer() { return "1.9" }
 
 metadata {
     definition(name: "Home Connect Dishwasher", namespace: "craigde", author: "Craig Dewar") {
@@ -383,6 +384,34 @@ void parse(String text) {
                                 // Extras for Node-RED SVG flow
                                 sendEvent(name: "elapsedTime", value: secs, isStateChange: true)
                                 sendEvent(name: "elapsedTimeDisplay", value: hhmm, isStateChange: false)
+                            }
+                            break
+
+                        /* --- Program finished event --- */
+                        case 'BSH.Common.Event.ProgramFinished':
+                            String eventState = valStr?.tokenize('.')?.last()
+                            String mappedState = null
+                            switch (eventState) {
+                                case 'Present':
+                                    mappedState = 'Event active'
+                                    // Reset progress and time when program finishes
+                                    sendEvent(name: "ProgramProgress", value: 0, isStateChange: true)
+                                    sendEvent(name: "RemainingProgramTime", value: "00:00", isStateChange: true)
+                                    sendEvent(name: "remainingTime", value: 0, isStateChange: true)
+                                    sendEvent(name: "remainingTimeDisplay", value: "00:00", isStateChange: false)
+                                    Utils.toLogger("info", "Program finished")
+                                    break
+                                case 'Off':
+                                    mappedState = 'Off'
+                                    Utils.toLogger("info", "Program finished event cleared")
+                                    break
+                                case 'Confirmed':
+                                    mappedState = 'Confirmed'
+                                    Utils.toLogger("info", "Program finished event confirmed")
+                                    break
+                            }
+                            if (mappedState) {
+                                sendEvent(name: "EventPresentState", value: mappedState, isStateChange: true)
                             }
                             break
                     } // switch
